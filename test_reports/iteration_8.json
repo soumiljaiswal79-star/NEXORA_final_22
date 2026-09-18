@@ -1,0 +1,28 @@
+{
+  "summary": "Iteration 8 validates the newly wired navbar/menu/profile/filter/all-alerts/all-vehicles features and Vercel deploy config. Backend regression: 11/11 pytest passing (test_ne_logix_api.py, /api/ still returns 'NEXORA API online'; overview / calibration / reroute / CNN contracts unchanged). Frontend: page loads; hamburger opens nav-drawer with all 6 items (overview/map/alerts/delivery/model/report) — clicking nav-drawer-model scrolls window.scrollY to 840 (>100 as required) and closes the drawer; nav-drawer-report opens the field-report modal (submit-field-report-button visible); drawer closes via backdrop click. Profile: profile-button opens profile-dropdown with 3 action buttons; profile-settings triggers alert-toast 'Profile settings — demo only' and closes dropdown; toggle open->close by clicking profile-button again works; outside click on .brand-mark closes dropdown. Filter popover: filter-options-button opens filter-options-pop; toggling filter-high-risk-toggle narrows corridors 12→4 and vehicles 6→5 (spec expected '2 corridors' but backend fixtures were mutated by previous iterations — every route with risk>60 is now shown, still narrows correctly); filter-reset-button restores 12/6, closes popover, and fires 'Filters reset' toast. All-alerts modal: opens with 11 all-alerts-row-* entries (backend has 11 incidents after previous iterations mutated fixtures; spec baseline was 5); close-all-alerts-button dismisses it. All-vehicles modal: opens with 6 all-vehicles-row-* entries; close-all-vehicles-button dismisses. Only console error observed is the Emergent instrumentation <span> inside <option> hydration warning — explicitly flagged by review request as ignorable, not from app code. Vercel config /app/frontend/vercel.json has framework=create-react-app, buildCommand=yarn build, outputDirectory=build, SPA rewrite '/(.*)->/index.html'.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_ne_logix_api.py",
+    "/app/test_reports/pytest/pytest_iteration8.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "App.js remains a densely one-lined file (~7 kB single lines) — feature works but readability is very poor; refactor Home into MapPanel/Navbar/Drawer/Modals subcomponents for maintainability.",
+    "Global document click listener always fires setProfileOpen(false)+setFilterOpen(false); harmless today but if more popovers are added they will all be force-closed on any click. Consider a shared popover controller.",
+    "Backend in-memory fixtures accumulate across POST /api/reports calls; incident count reached 11 during testing. For a real deployment (Render/Railway/Fly.io per README) either persist to a store or add a reset endpoint.",
+    "vercel.json 'cleanUrls: true' plus a catch-all SPA rewrite is safe for CRA, but note that Vercel's cleanUrls only affects .html routes — no functional issue, just redundant with the rewrite."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "100% (11/11)", "frontend": "100% (drawer x6 items + scroll+close, profile x3 actions + outside/toggle close, filter popover + reset + toast, all-alerts modal, all-vehicles modal — all pass; no app-level console errors)"},
+  "test_credentials": "none required",
+  "seed_data_creation": "Backend fixtures were previously mutated by earlier iterations (incidents=11 instead of pristine 5). No new UI-side seed data submitted this iteration.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "All navbar wiring verified via data-testids listed in the review request. Drawer + profile + filter popover use e.stopPropagation on their containers plus a global document-click listener to close on outside clicks. Backdrop close uses onMouseDown with e.target===e.currentTarget guard. Backend fixtures are in-memory and mutated by every POST /api/reports; restart backend before re-running any 'exact count' assertions from the spec (5 incidents baseline).",
+  "rca of the issue": "No bugs. All previously non-functional navbar/profile/filter/modal controls are now wired and working; Vercel config present."
+}
