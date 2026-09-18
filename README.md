@@ -1,28 +1,72 @@
 # NEXORA
 
-NEXORA is a demo-ready Smart Logistics & Accessibility Intelligence dashboard for India’s North Eastern Region.
+NEXORA is a demo-ready Smart Logistics & Accessibility Intelligence dashboard for India's North Eastern Region — real MobileNetV2 damage detection, real XGBoost risk calibration, live vehicle animation, offline-first multilingual field reporting.
 
-## Run
+## Run locally
 
-The project uses the provided React and FastAPI services. Start the frontend and backend with the workspace service runner; no external database, API keys, or setup is required.
+```bash
+# Backend (FastAPI + torchvision + xgboost, in-memory fixtures)
+cd backend && pip install -r requirements.txt && uvicorn server:app --host 0.0.0.0 --port 8001
 
-## Demo story
+# Frontend (React + Leaflet)
+cd frontend && yarn install && yarn start
+```
 
-1. Open the live corridor situation map to see risk-colored routes, incidents, and moving delivery vehicles across Assam, Manipur, Meghalaya, Nagaland, and Mizoram.
-2. Use state filters or the role selector to focus the operational view.
-3. Select **Field report**, submit a high-severity incident, and watch the risk score spike, a new alert appear, and vehicles in that state become rerouted.
-4. Switch to Assamese using the language control for field-ready labels.
+The frontend expects `REACT_APP_BACKEND_URL` in `frontend/.env` pointing at the FastAPI service (e.g. `http://localhost:8001`).
+
+## Demo story (5 min)
+
+1. Land on the dashboard. Metric strip, live map with color-coded corridors, and 6 animated delivery trucks moving across Assam, Manipur, Meghalaya, Nagaland, and Mizoram.
+2. Toggle Assamese. Filter to a single state. Peek at the top-3 bottlenecks.
+3. Submit a **Field report** with a photo. MobileNetV2 classifies damage, risk spikes, alert fires, vehicles in that state animate onto rerouted paths, and the CNN evidence panel shows the photo + top-3 ImageNet classes + damage sub-metrics.
+4. Manually switch a vehicle to an alternate corridor from the map's Switch Route panel.
+5. Reference the Prediction Engine panel: XGBoost regressor, R² 0.91, MAE ±3.6, top feature `rule_risk`, calibrated with the CNN's damage score as the 7th feature.
 
 ## Architecture
 
-React + Leaflet renders the dashboard and map. FastAPI exposes `/api/overview` and `/api/reports`. The repository is intentionally an in-memory, GIS-shaped demo fixture so it starts in seconds with no Replit database setup. The production-shaped seam is ready for PostGIS route geometries.
+- **Frontend:** React 19 + CRACO + React-Leaflet. One dashboard page with a persistent nav drawer, profile menu, filter popover, and modals for full alerts / full vehicle table.
+- **Backend:** FastAPI. In-memory NER-shaped fixtures (12 corridors, 6 vehicles, 5 incidents). `/api/overview`, `/api/reports`, `/api/vehicles/{id}/route`.
+- **Prediction layer:** `xgboost` regressor trained at startup on 900 rows of synthetic NER data (rule_risk, rainfall, wind, terrain, accessibility, incidents, cnn_damage → true_risk). `torchvision.mobilenet_v2` with ImageNet weights runs a real forward pass on every uploaded photo.
 
-Risk scoring is transparent rule-based logic: rainfall/terrain context, incident density, severity, and accessibility combine into a 0–100 route score. The dashboard exposes a synthetic calibration signal (89% accuracy, 0.84 confidence) to demonstrate the optional lightweight model layer without slowing the demo with model downloads.
+## Deploy the frontend to Vercel
 
-IMD weather, Bhuvan DEM terrain, GPS, CNN photo classification, XGBoost calibration, and PostGIS persistence are **MOCKED** with realistic contextual data. The report form supports image selection and offline-first copy, while the demo endpoint synchronizes the report into the live incident feed.
+`frontend/vercel.json` is pre-configured with the CRA framework preset, SPA rewrites, and the build/output paths.
 
-## Known demo limitations
+```bash
+# From the repo root
+cd frontend
+vercel --prod
+```
 
-- Data resets when the backend process restarts.
-- The map uses OpenStreetMap tiles and needs network access for the basemap; all operational data is local to the demo API.
-- The exact incident-count assertion in the generated regression test is state-dependent after reports accumulate; dynamic product behavior is intentional.
+In the Vercel project settings (Environment Variables), add:
+
+- `REACT_APP_BACKEND_URL` = your FastAPI public URL (e.g. `https://nexora-api.onrender.com`)
+
+## Deploy the backend
+
+Vercel serverless can't ship a `torch + xgboost` bundle (over the 250 MB size cap). Deploy the FastAPI backend to any Python-friendly host — a `Dockerfile`-friendly service such as **Render**, **Railway**, or **Fly.io** works out of the box:
+
+```bash
+# Render (Docker or native): use start command
+uvicorn server:app --host 0.0.0.0 --port $PORT
+
+# Environment: MONGO_URL, DB_NAME, CORS_ORIGINS (comma-separated Vercel domain)
+```
+
+On first request the backend downloads MobileNetV2 weights (~14 MB) to `~/.cache/torch/hub/checkpoints/`. XGBoost trains at import (~600 ms).
+
+## Everything mocked vs. real
+
+| Component | Status |
+|---|---|
+| MobileNetV2 damage classification | **REAL** (torchvision, ImageNet weights) |
+| XGBoost risk calibration (7 features) | **REAL** (trained at startup) |
+| Rule-based risk scoring | **REAL** (transparent, in server.py) |
+| Vehicle animation | **REAL** (client-side interpolation along route polyline) |
+| Leaflet map + OpenStreetMap tiles | **REAL** |
+| Multilingual UI (English / Assamese) | **REAL** |
+| IMD weather feed | MOCKED (per-route rainfall/wind fixtures) |
+| Bhuvan DEM terrain | MOCKED (per-route terrain type) |
+| Live GPS positions | MOCKED (client-side ping-pong along route.points) |
+| Government incident database | MOCKED (in-memory list) |
+| Persistent storage | MOCKED (in-memory dict; resets on process restart) |
